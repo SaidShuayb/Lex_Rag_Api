@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lex.uz RAG qidiruvi</title>
+  <style>
+    :root { --ink:#172033; --muted:#60708a; --line:#dce4ef; --blue:#155eef; --blue-dark:#0f46b8; --bg:#f5f7fb; --card:#fff; --ok:#067647; --bad:#b42318; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--bg); font:16px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .wrap { width:min(940px, calc(100% - 32px)); margin:0 auto; padding:42px 0 64px; }
+    header { margin-bottom:28px; }
+    h1 { margin:0 0 8px; font-size:clamp(28px,5vw,40px); letter-spacing:-.035em; }
+    .lead { max-width:700px; color:var(--muted); margin:0; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:24px; box-shadow:0 8px 30px rgb(23 32 51 / 6%); }
+    label { display:block; font-weight:650; margin-bottom:8px; }
+    textarea, input, select { width:100%; border:1px solid #bac6d8; border-radius:10px; background:#fff; color:var(--ink); font:inherit; }
+    textarea { resize:vertical; min-height:142px; padding:14px; }
+    input, select { padding:10px 12px; }
+    textarea:focus, input:focus, select:focus { outline:3px solid rgb(21 94 239 / 15%); border-color:var(--blue); }
+    .settings { display:grid; grid-template-columns:minmax(0,1fr) 160px 180px; gap:14px; margin-top:16px; }
+    .field label { font-size:14px; }
+    .key-row { display:flex; gap:8px; }
+    .key-row input { min-width:0; }
+    button { border:0; border-radius:10px; cursor:pointer; font:inherit; font-weight:700; }
+    #submit { margin-top:20px; min-height:46px; padding:0 20px; color:#fff; background:var(--blue); }
+    #submit:hover { background:var(--blue-dark); }
+    #submit:disabled { cursor:wait; opacity:.65; }
+    #toggle-key { padding:0 12px; color:#344054; background:#eef2f7; }
+    .hint { margin:14px 0 0; color:var(--muted); font-size:13px; }
+    #result { margin-top:24px; }
+    .hidden { display:none; }
+    .state { border-radius:12px; padding:14px 16px; }
+    .loading { color:#1d4ed8; background:#eff6ff; }
+    .error { color:var(--bad); background:#fef3f2; }
+    .no-answer { color:#854d0e; background:#fffaeb; }
+    .answer { border-left:4px solid var(--blue); padding:4px 0 4px 16px; font-size:18px; white-space:pre-wrap; }
+    .meta { display:flex; flex-wrap:wrap; gap:8px; margin:18px 0; }
+    .pill { background:#eef4ff; color:#1849a9; border-radius:100px; padding:4px 10px; font-size:13px; }
+    h2 { margin:28px 0 12px; font-size:20px; }
+    .source { border:1px solid var(--line); border-radius:12px; padding:16px; margin:10px 0; }
+    .source h3 { margin:0 0 6px; font-size:16px; }
+    .source p { margin:8px 0 0; color:#344054; white-space:pre-wrap; }
+    a { color:var(--blue); font-weight:650; }
+    details { margin-top:20px; border-top:1px solid var(--line); padding-top:16px; }
+    summary { cursor:pointer; font-weight:650; }
+    .context { padding:14px 0; border-bottom:1px solid var(--line); }
+    .context:last-child { border-bottom:0; }
+    .context small { color:var(--muted); }
+    .context p { margin:6px 0 0; white-space:pre-wrap; }
+    .example { background:none; color:var(--blue); text-decoration:underline; padding:0; font-weight:600; }
+    @media (max-width:700px) { .wrap { width:min(100% - 24px, 940px); padding-top:26px; } .card { padding:18px; } .settings { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1>Lex.uz bo‘yicha savol-javob</h1>
+      <p class="lead">Savolni yozing. Tizim Lex.uz’dan topilgan kontekst asosida javob, hujjat, modda va havolani ko‘rsatadi.</p>
+    </header>
+
+    <section class="card" aria-label="Savol yuborish">
+      <form id="question-form">
+        <label for="question">Savolingiz</label>
+        <textarea id="question" maxlength="2000" required placeholder="Masalan: Yillik asosiy mehnat ta’tilining eng kam muddati qancha?"></textarea>
+        <button class="example" type="button" id="example">Namunaviy savolni qo‘yish</button>
+
+        <div class="settings">
+          <div class="field">
+            <label for="api-key">API kalit</label>
+            <div class="key-row">
+              <input id="api-key" type="password" autocomplete="off" placeholder=".env.local faylidagi RAG_API_KEY">
+              <button id="toggle-key" type="button" aria-label="Kalitni ko‘rsatish">Ko‘rsatish</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="language">Savol tili</label>
+            <select id="language">
+              <option value="">Avtomatik</option>
+              <option value="uz-Latn">O‘zbek lotin</option>
+              <option value="uz-Cyrl">O‘zbek kirill</option>
+              <option value="ru">Rus</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="as-of-date">Tahrir sanasi</label>
+            <input id="as-of-date" type="date">
+          </div>
+        </div>
+        <button id="submit" type="submit">Javobni topish</button>
+        <p class="hint">Kalit faqat brauzerning ushbu sessiyasida saqlanadi. Uni `.env.local` faylidan oling. Natijadagi Lex.uz havolasini ochib, moddani tekshirishingiz mumkin.</p>
+      </form>
+    </section>
+
+    <section id="result" class="hidden" aria-live="polite"></section>
+  </main>
+
+  <script>
+    const form = document.getElementById('question-form');
+    const question = document.getElementById('question');
+    const apiKey = document.getElementById('api-key');
+    const language = document.getElementById('language');
+    const asOfDate = document.getElementById('as-of-date');
+    const result = document.getElementById('result');
+    const submit = document.getElementById('submit');
+
+    apiKey.value = sessionStorage.getItem('lex-rag-api-key') || '';
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+    const sourceCard = (citation) => `
+      <article class="source">
+        <h3>[${citation.ref}] ${escapeHtml(citation.doc_title)}</h3>
+        <div class="meta"><span class="pill">${escapeHtml(citation.article)}</span><span class="pill">${escapeHtml(citation.doc_status)}</span><span class="pill">Tahrir: ${escapeHtml(citation.edition_date)}</span></div>
+        <a href="${escapeHtml(citation.url)}" target="_blank" rel="noopener noreferrer">Lex.uz manbasini ochish ↗</a>
+        <p>${escapeHtml(citation.quote)}</p>
+      </article>`;
+    const renderContexts = (contexts) => contexts.length ? `
+      <details>
+        <summary>Topilgan kontekstlar (${contexts.length})</summary>
+        ${contexts.map(context => `<div class="context"><small>#${context.rank} · ${escapeHtml(context.article)} · retrieval: ${Number(context.retrieval_score).toFixed(2)} · rerank: ${Number(context.rerank_score).toFixed(2)}</small><p>${escapeHtml(context.text)}</p></div>`).join('')}
+      </details>` : '';
+    const show = (html) => { result.classList.remove('hidden'); result.innerHTML = html; };
+
+    document.getElementById('example').addEventListener('click', () => {
+      question.value = 'Yillik asosiy mehnat ta’tilining eng kam muddati qancha?';
+      question.focus();
+    });
+    document.getElementById('toggle-key').addEventListener('click', (event) => {
+      const visible = apiKey.type === 'text';
+      apiKey.type = visible ? 'password' : 'text';
+      event.currentTarget.textContent = visible ? 'Ko‘rsatish' : 'Yashirish';
+    });
+    apiKey.addEventListener('input', () => sessionStorage.setItem('lex-rag-api-key', apiKey.value));
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!apiKey.value.trim()) {
+        show('<div class="state error">API kalitini kiriting. U loyiha ichidagi <code>.env.local</code> faylida <code>RAG_API_KEY</code> sifatida berilgan.</div>');
+        return;
+      }
+      submit.disabled = true;
+      submit.textContent = 'Qidirilmoqda…';
+      show('<div class="state loading">Lex.uz manbasi qidirilmoqda. Bu biroz vaqt olishi mumkin…</div>');
+      const options = { top_k: 5, return_contexts: true, return_debug: true, temperature: 0, seed: 42, answer_language: 'auto' };
+      if (asOfDate.value) options.as_of_date = asOfDate.value;
+      const payload = { id: 'browser-query', question: question.value.trim(), language: language.value || null, options, as_of_date: asOfDate.value || null };
+      try {
+        const response = await fetch('/v1/rag/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${apiKey.value.trim()}` },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || `Server xatosi: ${response.status}`);
+        if (data.status === 'ok') {
+          show(`
+            <div class="card">
+              <div class="meta"><span class="pill">Javob tili: ${escapeHtml(data.answer_language)}</span><span class="pill">${data.timing?.total_ms ?? 0} ms</span></div>
+              <div class="answer">${escapeHtml(data.answer)}</div>
+              <h2>Manbalar</h2>
+              ${(data.citations || []).map(sourceCard).join('') || '<p>Javob uchun manba qaytmadi.</p>'}
+              ${renderContexts(data.contexts || [])}
+            </div>`);
+        } else if (data.status === 'no_answer') {
+          show(`<div class="state no-answer">Ushbu savol uchun mos qonuniy manba topilmadi. Savolni aniqroq yozib ko‘ring.</div>${renderContexts(data.contexts || [])}`);
+        } else {
+          const err = data.error || {};
+          show(`<div class="state error"><strong>${escapeHtml(err.code || 'XATO')}</strong><br>${escapeHtml(err.message || 'Savolni qayta ishlashda xato yuz berdi.')}</div>`);
+        }
+      } catch (error) {
+        show(`<div class="state error">${escapeHtml(error.message || 'Tarmoqqa ulanib bo‘lmadi.')}</div>`);
+      } finally {
+        submit.disabled = false;
+        submit.textContent = 'Javobni topish';
+      }
+    });
+  </script>
+</body>
+</html>
